@@ -1,0 +1,57 @@
+# Bytecode and compiled files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environment folders
+venv/
+.venv/
+env/
+.env/
+
+# Python environment variable files
+.env
+.env.*
+
+# IDEs and editor configs
+.idea/
+.vscode/
+
+# OS-specific junk
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+*.log
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Migrations (if using Alembic or Django-style migrations)
+migrations/
+
+# SQLite database files (optional)
+*.sqlite3
+*.db
+
+# Docker-related
+*.pid
+*.tar
+*.bak
+docker-compose.override.yml
+
+# FastAPI-specific (if using static/media folders or temp uploads)
+staticfiles/
+media/
+uploads/
+tmp/
+
+# Jupyter Notebooks (optional)
+.ipynb_checkpoints/
+
+# Others
+dist/
+build/
+*.egg-info/
