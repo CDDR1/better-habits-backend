@@ -11,6 +11,7 @@ class HabitsCategoriesLink(SQLModel, table=True):
     created_at: datetime
     updated_at: datetime
 
+
 class Habits(SQLModel, table=True):
     id: int = Field(primary_key=True)
     name: str
@@ -43,3 +44,14 @@ class Categories(SQLModel, table=True):
     habits: List["Habits"] = Relationship(back_populates="categories", link_model=HabitsCategoriesLink)
 
 
+class HabitLogs(SQLModel, table=True):
+    __tablename__ = "habit_logs"
+
+    id: int = Field(primary_key=True)
+    habit_fk: int = Field(foreign_key="habits.id")
+    is_completed: bool = False
+    due_date: datetime
+    progress_value: Optional[str] = None
+    note: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
