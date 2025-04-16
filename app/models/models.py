@@ -3,6 +3,15 @@ from typing import Optional, List
 
 from sqlmodel import SQLModel, Field, Relationship
 
+
+class Users(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    email: str
+    password_hash: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class HabitsCategoriesLink(SQLModel, table=True):
     __tablename__ = "habits_categories_link"
 
@@ -28,6 +37,7 @@ class Habits(SQLModel, table=True):
     display_order: Optional[int] = None
     goal: str
     goal_is_time: bool
+    user_fk: int = Field(foreign_key="users.id")
     created_at: datetime
     updated_at: datetime
 
