@@ -10,4 +10,4 @@ app.include_router(habits.router)
 
 @app.get("/")
 def read_root():
-    return {"Hello": "World!"}
+    return {"Hello": "World!"} 

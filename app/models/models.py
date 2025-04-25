@@ -35,11 +35,11 @@ class Habits(SQLModel, table=True):
     start_date: datetime
     end_date: Optional[datetime] = None
     display_order: Optional[int] = None
-    goal: str
+    goal: Optional[str] = None
     goal_is_time: bool
     user_fk: int = Field(foreign_key="users.id")
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
     categories: List["Categories"] = Relationship(back_populates="habits", link_model=HabitsCategoriesLink)
 
