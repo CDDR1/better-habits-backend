@@ -44,5 +44,12 @@ def create_habit(habit: HabitCreate, session: SessionDep):
 @router.delete("/habits/{habit_id}")
 def delete_habit(habit_id: int, session: SessionDep):
     statement = select(Habits).where(Habits.id == habit_id)
-    habit = session.exec(statement).one_or_none()
+    habit = session.exec(statement).one()
     session.delete(habit)
+    session.commit()
+
+    # confirm habit was deleted
+    habit = session.exec(statement).first()
+    if habit != None:
+        # TODO: Raise an exception
+        pass
