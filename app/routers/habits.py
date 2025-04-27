@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from ..db.database import SessionDep
-from sqlmodel import select, func
+from sqlmodel import select, func, desc
 from ..models.models import Habits, HabitLogs, Categories
 from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest
 
@@ -14,9 +14,8 @@ def get_habits(session: SessionDep):
 
 @router.get("/user/{user_id}/habits")
 def get_habits_for_user(user_id: int, session: SessionDep):
-    statement = select(Habits).where(Habits.user_fk == user_id)
+    statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
     habits = session.exec(statement).all()
-    # TODO: add logic to get habits by display_order DESC
     return habits
 
 @router.get("/habits/{habit_id}/categories")
