@@ -35,7 +35,8 @@ class Habits(SQLModel, table=True):
     start_date: datetime
     end_date: Optional[datetime] = None
     display_order: Optional[int] = None
-    goal: Optional[str] = None
+    goal_value: Optional[int] = None
+    goal_unit: Optional[str] = None
     goal_is_time: bool
     user_fk: int = Field(foreign_key="users.id")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -63,6 +64,7 @@ class HabitLogs(SQLModel, table=True):
     due_date: datetime
     progress_value: Optional[str] = None
     note: Optional[str] = None
-    goal: Optional[str] = None
+    goal_value: Optional[int] = None
+    goal_unit: Optional[str] = None
     created_at: datetime
     updated_at: datetime

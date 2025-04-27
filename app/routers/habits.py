@@ -16,6 +16,7 @@ def get_habits(session: SessionDep):
 def get_habits_for_user(user_id: int, session: SessionDep):
     statement = select(Habits).where(Habits.user_fk == user_id)
     habits = session.exec(statement).all()
+    # TODO: add logic to get habits by display_order DESC
     return habits
 
 @router.get("/habits/{habit_id}/categories")

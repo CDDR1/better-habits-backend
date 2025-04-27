@@ -14,6 +14,7 @@ class UpsertHabit(BaseModel):
     is_check_only: bool = None
     start_date: datetime = None
     end_date: Optional[datetime] = None
-    goal: Optional[str] = None
+    goal_value: Optional[int] = None
+    goal_unit: Optional[str] = None
     goal_is_time: bool = None
     user_fk: int = None
