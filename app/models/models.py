@@ -63,5 +63,6 @@ class HabitLogs(SQLModel, table=True):
     due_date: datetime
     progress_value: Optional[str] = None
     note: Optional[str] = None
+    goal: Optional[str] = None
     created_at: datetime
     updated_at: datetime
