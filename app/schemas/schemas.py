@@ -19,5 +19,5 @@ class UpsertHabit(BaseModel):
     goal_is_time: bool = None
     user_fk: int = None
 
-class AddCategoryForHabit(BaseModel):
+class AddOrRemoveCategoryFromHabit(BaseModel):
     category_id: int
