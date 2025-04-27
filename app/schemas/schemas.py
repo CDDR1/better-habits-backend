@@ -18,3 +18,6 @@ class UpsertHabit(BaseModel):
     goal_unit: Optional[str] = None
     goal_is_time: bool = None
     user_fk: int = None
+
+class AddCategoryForHabit(BaseModel):
+    category_id: int

@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 from ..db.database import SessionDep
 from sqlmodel import select, func
-from ..models.models import Habits, HabitLogs
-from ..schemas.schemas import UpsertHabit
+from ..models.models import Habits, HabitLogs, Categories
+from ..schemas.schemas import UpsertHabit, AddCategoryForHabit
 
 router = APIRouter()
 
@@ -24,6 +24,19 @@ def get_categories_for_habit(habit_id: int, session: SessionDep):
     statement = select(Habits).where(Habits.id == habit_id)
     habit = session.exec(statement).one_or_none()
     return habit.categories
+
+@router.patch("/habits/{habit_id}/categories")
+def add_category_for_habit(habit_id: int, request_body: AddCategoryForHabit, session: SessionDep):
+    category_id = request_body.category_id
+    habit = session.exec(select(Habits).where(Habits.id == habit_id)).one()
+    category = session.exec(select(Categories).where(Categories.id == category_id)).one()
+    habit.categories.append(category)
+    session.add(habit)
+    session.commit()
+    return habit.categories
+
+def delete_category_for_habit():
+    pass
 
 @router.get("/habits/{habit_id}/logs")
 def get_habit_logs_for_habit(habit_id: int, session: SessionDep):
@@ -55,7 +68,6 @@ def update_habit(habit_id: int, updated_habit: UpsertHabit, session: SessionDep)
     session.commit()
     session.refresh(habit)
     return habit
-
 
 @router.delete("/habits/{habit_id}")
 def delete_habit(habit_id: int, session: SessionDep):
