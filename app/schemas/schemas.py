@@ -21,3 +21,6 @@ class UpsertHabitRequest(BaseModel):
 
 class UpdateHabitCategoriesRequest(BaseModel):
     category_ids: List[int]
+
+class DeleteHabitResponse(BaseModel):
+    is_success: bool

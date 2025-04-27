@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from ..db.database import SessionDep
 from sqlmodel import select, func, desc
 from ..models.models import Habits, HabitLogs, Categories
-from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest
+from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest, DeleteHabitResponse
 
 router = APIRouter()
 
@@ -79,15 +79,35 @@ def update_habit(habit_id: int, updated_habit: UpsertHabitRequest, session: Sess
     session.refresh(habit)
     return habit
 
+def balance_display_order_fields(deleted_display_order: int, session: SessionDep):
+    """
+    Updates the display_order fields to remove gaps and ensure they are sequential, typically after habit deletion.
+    :param deleted_display_order: integer
+    :param session: SessionDep
+    """
+    statement = select(Habits).where(Habits.display_order > deleted_display_order)
+    habits_to_update = session.exec(statement).all()
+
+    for habit in habits_to_update:
+        habit.display_order = habit.display_order - 1
+
+    if habits_to_update:
+        session.add_all(habits_to_update)
+        session.commit()
+
 @router.delete("/habits/{habit_id}")
-def delete_habit(habit_id: int, session: SessionDep):
+def delete_habit(habit_id: int, session: SessionDep) -> DeleteHabitResponse:
     statement = select(Habits).where(Habits.id == habit_id)
     habit = session.exec(statement).one()
     session.delete(habit)
     session.commit()
 
     # confirm habit was deleted
-    habit = session.exec(statement).first()
-    if habit != None:
+    deleted_habit = session.exec(statement).first()
+    if deleted_habit is not None:
         # TODO: Raise an exception
         pass
+
+    balance_display_order_fields(habit.display_order, session)
+    response = DeleteHabitResponse(is_success=True)
+    return response
