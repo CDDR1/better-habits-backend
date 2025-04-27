@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from ..db.database import SessionDep
 from sqlmodel import select, func
 from ..models.models import Habits, HabitLogs
-from ..schemas.schemas import HabitCreate
+from ..schemas.schemas import UpsertHabit
 
 router = APIRouter()
 
@@ -31,15 +31,30 @@ def get_habit_logs_for_habit(habit_id: int, session: SessionDep):
     return habit_logs
 
 @router.post("/habits")
-def create_habit(habit: HabitCreate, session: SessionDep):
+def create_habit(habit: UpsertHabit, session: SessionDep):
     new_habit = Habits(**habit.dict())
     get_greatest_display_order_statement = select(func.max(Habits.display_order))
-    display_order = session.exec(get_greatest_display_order_statement).one()
-    new_habit.display_order = (display_order or 0) + 1
+    greatest_display_order = session.exec(get_greatest_display_order_statement).one()
+    new_habit.display_order = (greatest_display_order or 0) + 1
     session.add(new_habit)
     session.commit()
     session.refresh(new_habit)
     return new_habit
+
+@router.patch("/habits/{habit_id}")
+def update_habit(habit_id: int, updated_habit: UpsertHabit, session: SessionDep):
+    get_habit_statement = select(Habits).where(Habits.id == habit_id)
+    habit = session.exec(get_habit_statement).one()
+
+    updated_habit_dict = updated_habit.dict(exclude_unset=True)
+    for key, value in updated_habit_dict.items():
+        setattr(habit, key, value)
+
+    session.add(habit)
+    session.commit()
+    session.refresh(habit)
+    return habit
+
 
 @router.delete("/habits/{habit_id}")
 def delete_habit(habit_id: int, session: SessionDep):
