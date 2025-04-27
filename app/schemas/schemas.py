@@ -1,9 +1,9 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel
 
-class UpsertHabit(BaseModel):
+class UpsertHabitRequest(BaseModel):
     name: str = None
     description: Optional[str] = None
     icon: Optional[str] = None
@@ -19,5 +19,5 @@ class UpsertHabit(BaseModel):
     goal_is_time: bool = None
     user_fk: int = None
 
-class AddOrRemoveCategoryFromHabit(BaseModel):
-    category_id: int
+class UpdateHabitCategoriesRequest(BaseModel):
+    category_ids: List[int]

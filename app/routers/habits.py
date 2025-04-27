@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from ..db.database import SessionDep
 from sqlmodel import select, func
 from ..models.models import Habits, HabitLogs, Categories
-from ..schemas.schemas import UpsertHabit, AddOrRemoveCategoryFromHabit
+from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest
 
 router = APIRouter()
 
@@ -26,21 +26,25 @@ def get_categories_for_habit(habit_id: int, session: SessionDep):
     return habit.categories
 
 @router.post("/habits/{habit_id}/categories")
-def add_category_for_habit(habit_id: int, request_body: AddOrRemoveCategoryFromHabit, session: SessionDep):
-    category_id = request_body.category_id
+def add_categories_for_habit(habit_id: int, request_body: UpdateHabitCategoriesRequest, session: SessionDep):
     habit = session.exec(select(Habits).where(Habits.id == habit_id)).one()
-    category = session.exec(select(Categories).where(Categories.id == category_id)).one()
-    habit.categories.append(category)
+
+    for category_id in request_body.category_ids:
+        category = session.exec(select(Categories).where(Categories.id == category_id)).one()
+        habit.categories.append(category)
+
     session.add(habit)
     session.commit()
     return habit.categories
 
 @router.delete("/habits/{habit_id}/categories")
-def delete_category_from_habit(habit_id: int, request_body: AddOrRemoveCategoryFromHabit, session: SessionDep):
-    category_id = request_body.category_id
+def delete_category_from_habit(habit_id: int, request_body: UpdateHabitCategoriesRequest, session: SessionDep):
     habit = session.exec(select(Habits).where(Habits.id == habit_id)).one()
-    category = session.exec(select(Categories).where(Categories.id == category_id)).one()
-    habit.categories.remove(category)
+
+    for category_id in request_body.category_ids:
+        category = session.exec(select(Categories).where(Categories.id == category_id)).one()
+        habit.categories.remove(category)
+
     session.add(habit)
     session.commit()
     return habit.categories
@@ -52,7 +56,7 @@ def get_habit_logs_for_habit(habit_id: int, session: SessionDep):
     return habit_logs
 
 @router.post("/habits")
-def create_habit(habit: UpsertHabit, session: SessionDep):
+def create_habit(habit: UpsertHabitRequest, session: SessionDep):
     new_habit = Habits(**habit.dict())
     get_greatest_display_order_statement = select(func.max(Habits.display_order))
     greatest_display_order = session.exec(get_greatest_display_order_statement).one()
@@ -63,7 +67,7 @@ def create_habit(habit: UpsertHabit, session: SessionDep):
     return new_habit
 
 @router.patch("/habits/{habit_id}")
-def update_habit(habit_id: int, updated_habit: UpsertHabit, session: SessionDep):
+def update_habit(habit_id: int, updated_habit: UpsertHabitRequest, session: SessionDep):
     get_habit_statement = select(Habits).where(Habits.id == habit_id)
     habit = session.exec(get_habit_statement).one()
 
