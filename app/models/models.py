@@ -34,7 +34,7 @@ class Habits(SQLModel, table=True):
     is_check_only: bool
     start_date: datetime
     end_date: Optional[datetime] = None
-    display_order: Optional[int] = None
+    display_order: int = None
     goal_value: Optional[int] = None
     goal_unit: Optional[str] = None
     goal_is_time: bool

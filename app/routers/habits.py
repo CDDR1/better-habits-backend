@@ -1,8 +1,11 @@
+from typing import List
+
 from fastapi import APIRouter
 from ..db.database import SessionDep
 from sqlmodel import select, func, desc
 from ..models.models import Habits, HabitLogs, Categories
-from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest, DeleteHabitResponse
+from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest, DeleteHabitResponse, \
+    ReorderHabitsRequest, ReorderHabitsResponse
 
 router = APIRouter()
 
@@ -110,4 +113,23 @@ def delete_habit(habit_id: int, session: SessionDep) -> DeleteHabitResponse:
 
     balance_display_order_fields(habit.display_order, session)
     response = DeleteHabitResponse(is_success=True)
+    return response
+
+@router.patch("/habits-reorder")
+def reorder_habits(request_body: ReorderHabitsRequest, session: SessionDep) -> ReorderHabitsResponse:
+    reorder_habits = request_body.reorder_habits
+    id_to_display_order_dict = {}
+
+    for habit in reorder_habits:
+        id_to_display_order_dict[habit.id] = habit.display_order
+
+    statement = select(Habits).where(Habits.id.in_(id_to_display_order_dict.keys()))
+    habits = session.exec(statement).all()
+
+    for habit in habits:
+        habit.display_order = id_to_display_order_dict[habit.id]
+
+    session.add_all(habits)
+    session.commit()
+    response = ReorderHabitsResponse(is_success=True)
     return response
