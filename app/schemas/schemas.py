@@ -28,7 +28,7 @@ class ReorderHabit(BaseModel):
     display_order: int
 
 class ReorderHabitsRequest(BaseModel):
-    reorder_habits: List[ReorderHabit]
+    habits_to_reorder: List[ReorderHabit]
 
 class DeleteHabitResponse(BaseModel):
     is_success: bool

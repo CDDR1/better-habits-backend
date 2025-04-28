@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from ..db.database import SessionDep
 from sqlmodel import select, func, desc
 from ..models.models import Habits, HabitLogs, Categories
@@ -117,14 +117,19 @@ def delete_habit(habit_id: int, session: SessionDep) -> DeleteHabitResponse:
 
 @router.patch("/habits-reorder")
 def reorder_habits(request_body: ReorderHabitsRequest, session: SessionDep) -> ReorderHabitsResponse:
-    reorder_habits = request_body.reorder_habits
-    id_to_display_order_dict = {}
+    habits_to_reorder = request_body.habits_to_reorder
+    habits_to_reorder_ids = {habit.id for habit in habits_to_reorder}
+    if len(habits_to_reorder_ids) != len(habits_to_reorder):
+        raise HTTPException(status_code=400, detail=f"Duplicate habit IDs found in request")
 
-    for habit in reorder_habits:
-        id_to_display_order_dict[habit.id] = habit.display_order
-
+    id_to_display_order_dict = {habit.id: habit.display_order for habit in habits_to_reorder}
     statement = select(Habits).where(Habits.id.in_(id_to_display_order_dict.keys()))
     habits = session.exec(statement).all()
+
+    found_ids = {habit.id for habit in habits}
+    missing_ids = habits_to_reorder_ids - found_ids
+    if missing_ids:
+        raise HTTPException(status_code=400, detail=f"Not all habit IDs in the request were found - missing IDs: {sorted(missing_ids)}")
 
     for habit in habits:
         habit.display_order = id_to_display_order_dict[habit.id]
