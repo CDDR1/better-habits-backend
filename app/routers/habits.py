@@ -1,8 +1,7 @@
-from typing import List
-
 from fastapi import APIRouter, HTTPException
-from ..db.database import SessionDep
 from sqlmodel import select, func, desc
+
+from ..db.database import SessionDep
 from ..models.models import Habits, HabitLogs, Categories
 from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest, DeleteHabitResponse, \
     ReorderHabitsRequest, ReorderHabitsResponse
@@ -15,7 +14,7 @@ def get_habits(session: SessionDep):
     habits = session.exec(select(Habits)).all()
     return habits
 
-@router.get("/user/{user_id}/habits")
+@router.get("/users/{user_id}/habits")
 def get_habits_for_user(user_id: int, session: SessionDep):
     statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
     habits = session.exec(statement).all()
@@ -59,7 +58,7 @@ def get_habit_logs_for_habit(habit_id: int, session: SessionDep):
 
 @router.post("/habits")
 def create_habit(habit: UpsertHabitRequest, session: SessionDep):
-    new_habit = Habits(**habit.dict())
+    new_habit = Habits(**habit.model_dump())
     get_greatest_display_order_statement = select(func.max(Habits.display_order))
     greatest_display_order = session.exec(get_greatest_display_order_statement).one()
     new_habit.display_order = (greatest_display_order or 0) + 1
@@ -73,7 +72,7 @@ def update_habit(habit_id: int, updated_habit: UpsertHabitRequest, session: Sess
     get_habit_statement = select(Habits).where(Habits.id == habit_id)
     habit = session.exec(get_habit_statement).one()
 
-    updated_habit_dict = updated_habit.dict(exclude_unset=True)
+    updated_habit_dict = updated_habit.model_dump(exclude_unset=True)
     for key, value in updated_habit_dict.items():
         setattr(habit, key, value)
 

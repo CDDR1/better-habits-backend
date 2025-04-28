@@ -49,8 +49,9 @@ class Categories(SQLModel, table=True):
     id: int = Field(primary_key=True)
     name: str
     icon: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
+    user_fk: int = Field(foreign_key="users.id")
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
     habits: List["Habits"] = Relationship(back_populates="categories", link_model=HabitsCategoriesLink)
 

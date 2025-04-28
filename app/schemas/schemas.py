@@ -4,6 +4,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 
 
+# //////////////////////////////////////// REQUESTS ////////////////////////////////////////
 class UpsertHabitRequest(BaseModel):
     name: str = None
     description: Optional[str] = None
@@ -30,8 +31,22 @@ class ReorderHabit(BaseModel):
 class ReorderHabitsRequest(BaseModel):
     habits_to_reorder: List[ReorderHabit]
 
+class CreateCategoryRequest(BaseModel):
+    name: str
+    icon: str = None
+    user_fk: int
+
+class UpdateCategoryRequest(BaseModel):
+    name: str = None
+    icon: str = None
+
+
+# //////////////////////////////////////// RESPONSES ////////////////////////////////////////
 class DeleteHabitResponse(BaseModel):
     is_success: bool
 
 class ReorderHabitsResponse(BaseModel):
+    is_success: bool
+
+class DeleteCategoryResponse(BaseModel):
     is_success: bool
