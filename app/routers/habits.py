@@ -87,8 +87,8 @@ def update_habit(habit_id: int, updated_habit: UpsertHabitRequest, session: Sess
 def balance_display_order_fields(deleted_display_order: int, session: SessionDep):
     """
     Updates the display_order fields to remove gaps and ensure they are sequential, typically after habit deletion.
-    :param deleted_display_order: integer
-    :param session: SessionDep
+    :param deleted_display_order: display order of the deleted habit
+    :param session: current DB session
     """
     statement = select(Habits).where(Habits.display_order > deleted_display_order)
     habits_to_update = session.exec(statement).all()
@@ -145,18 +145,24 @@ def reorder_habits(request_body: ReorderHabitsRequest, session: SessionDep) -> R
 def get_habits_by_categories(category_ids: Annotated[List[int], Query()], session: SessionDep) -> List[Habits]:
     """
     Returns habits filtered by one or multiple categories
-    :return:
+    :param category_ids: Query parameter that contains a list of category iDs to filter habits by
+    :param session: current DB session
+    :return: list of Habits
     """
+    validate_category_ids_statement = select(Categories.id).where(Categories.id.in_(category_ids))
+    found_category_ids = session.exec(validate_category_ids_statement).all()
+    if len(found_category_ids) != len(category_ids):
+        categories_not_found = set(category_ids) - set(found_category_ids)
+        raise HTTPException(status_code=400, detail=f"Not all category IDs in the request were found - missing IDs: {sorted(categories_not_found)}")
 
-    # TODO: Add validation for category ids
-
-    statement = (
+    habits_by_categories_statement = (
         select(HabitsCategoriesLink.habit_fk)
         .where(HabitsCategoriesLink.category_fk.in_(category_ids))
         .group_by(HabitsCategoriesLink.habit_fk)
         .having(func.count(distinct(HabitsCategoriesLink.category_fk)) == len(category_ids))
     )
+    habits_ids = session.exec(habits_by_categories_statement).all()
 
-    habits_ids = session.exec(statement).all()
-    habits = session.exec(select(Habits).where(Habits.id.in_(habits_ids)))
+    get_habits_statement = select(Habits).where(Habits.id.in_(habits_ids))
+    habits = session.exec(get_habits_statement)
     return habits
