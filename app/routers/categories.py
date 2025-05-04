@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from sqlmodel import select
 
 from ..db.database import SessionDep
-from ..models.models import Habits, HabitLogs, Categories
+from ..models.models import Categories
 from ..schemas.schemas import CreateCategoryRequest, UpdateCategoryRequest, DeleteCategoryResponse
 
 router = APIRouter()

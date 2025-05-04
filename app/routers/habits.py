@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException
-from sqlmodel import select, func, desc
+from typing import List, Annotated
+
+from fastapi import APIRouter, HTTPException, Query
+from sqlmodel import select, func, desc, distinct
 
 from ..db.database import SessionDep
-from ..models.models import Habits, HabitLogs, Categories
+from ..models.models import Habits, HabitLogs, Categories, HabitsCategoriesLink
 from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest, DeleteHabitResponse, \
     ReorderHabitsRequest, ReorderHabitsResponse
 
@@ -28,6 +30,7 @@ def get_categories_for_habit(habit_id: int, session: SessionDep):
 
 @router.post("/habits/{habit_id}/categories")
 def add_categories_for_habit(habit_id: int, request_body: UpdateHabitCategoriesRequest, session: SessionDep):
+    # TODO: Add input validation to avoid adding categories that already exist
     habit = session.exec(select(Habits).where(Habits.id == habit_id)).one()
 
     for category_id in request_body.category_ids:
@@ -137,3 +140,23 @@ def reorder_habits(request_body: ReorderHabitsRequest, session: SessionDep) -> R
     session.commit()
     response = ReorderHabitsResponse(is_success=True)
     return response
+
+@router.get("/habits-by-categories")
+def get_habits_by_categories(category_ids: Annotated[List[int], Query()], session: SessionDep) -> List[Habits]:
+    """
+    Returns habits filtered by one or multiple categories
+    :return:
+    """
+
+    # TODO: Add validation for category ids
+
+    statement = (
+        select(HabitsCategoriesLink.habit_fk)
+        .where(HabitsCategoriesLink.category_fk.in_(category_ids))
+        .group_by(HabitsCategoriesLink.habit_fk)
+        .having(func.count(distinct(HabitsCategoriesLink.category_fk)) == len(category_ids))
+    )
+
+    habits_ids = session.exec(statement).all()
+    habits = session.exec(select(Habits).where(Habits.id.in_(habits_ids)))
+    return habits
