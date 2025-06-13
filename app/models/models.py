@@ -61,11 +61,11 @@ class HabitLogs(SQLModel, table=True):
 
     id: int = Field(primary_key=True)
     habit_fk: int = Field(foreign_key="habits.id")
-    is_completed: bool = False
-    due_date: datetime
-    progress_value: Optional[str] = None
+    progress_value: Optional[float] = None
     note: Optional[str] = None
+    # these are the goal value and goal unit at time of entry
     goal_value: Optional[int] = None
     goal_unit: Optional[str] = None
+    completion_percentage: float
     created_at: datetime
     updated_at: datetime

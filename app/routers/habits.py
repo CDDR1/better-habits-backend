@@ -10,6 +10,9 @@ from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest, 
 
 router = APIRouter()
 
+# TODO: Add docstring comments
+# TODO: Move the logic and helper functions of these endpoints to the services directory
+
 # TODO: Might want to delete this endpoint after development, as there is no need to get all the habits
 @router.get("/habits")
 def get_habits(session: SessionDep):
