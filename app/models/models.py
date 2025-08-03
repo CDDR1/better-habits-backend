@@ -67,5 +67,5 @@ class HabitLogs(SQLModel, table=True):
     goal_value: Optional[int] = None
     goal_unit: Optional[str] = None
     completion_percentage: float
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
