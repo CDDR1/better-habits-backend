@@ -2,6 +2,7 @@ from typing import List, Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import select, func, desc, distinct
+from datetime import date
 
 from ..db.database import SessionDep
 from ..models.models import Habits, HabitLogs, Categories, HabitsCategoriesLink
@@ -24,6 +25,39 @@ def get_habits_for_user(user_id: int, session: SessionDep):
     statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
     habits = session.exec(statement).all()
     return habits
+
+def is_today_in_list_of_specific_week_days(repeat_config: str):
+    if not repeat_config:
+        return False
+
+    weekdays = repeat_config.split(",")
+    today = date.today().weekday()
+    weekday_strings = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    return weekday_strings[today].lower() in [weekday.lower() for weekday in weekdays]
+
+@router.get("/users/{user_id}/habits-to-complete")
+def get_habits_to_complete_today(user_id: int, session: SessionDep):
+    statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
+    habits = session.exec(statement).all()
+
+    habits_to_complete_ids = []
+    for habit in habits:
+        # TODO: Add enum for repeat types
+        repeat_type = habit.repeat_type
+        if repeat_type == "DAILY":
+            habits_to_complete_ids.append(habit.id)
+        elif repeat_type == "SPECIFIC_WEEK_DAYS" and is_today_in_list_of_specific_week_days(habit.repeat_config):
+            habits_to_complete_ids.append(habit.id)
+        elif repeat_type == "SPECIFIC_MONTH_DAYS":
+            pass
+        elif repeat_type == "N_TIMES_PER_WEEK":
+            pass
+        elif repeat_type == "N_TIMES_PER_MONTH":
+            pass
+        elif repeat_type == "EVERY_N_DAYS":
+            pass
+
+    return habits_to_complete_ids
 
 @router.get("/habits/{habit_id}/categories")
 def get_categories_for_habit(habit_id: int, session: SessionDep):
