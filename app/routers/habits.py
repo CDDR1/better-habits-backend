@@ -2,7 +2,7 @@ from typing import List, Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import select, func, desc, distinct
-from datetime import date
+from datetime import date, datetime
 
 from ..db.database import SessionDep
 from ..models.models import Habits, HabitLogs, Categories, HabitsCategoriesLink
@@ -26,7 +26,7 @@ def get_habits_for_user(user_id: int, session: SessionDep):
     habits = session.exec(statement).all()
     return habits
 
-def is_today_in_list_of_specific_week_days(repeat_config: str):
+def is_today_in_list_of_specific_weekdays(repeat_config: str):
     if not repeat_config:
         return False
 
@@ -34,6 +34,14 @@ def is_today_in_list_of_specific_week_days(repeat_config: str):
     today = date.today().weekday()
     weekday_strings = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
     return weekday_strings[today].lower() in [weekday.lower() for weekday in weekdays]
+
+def is_today_in_list_of_specific_month_days(repeat_config: str):
+    if not repeat_config:
+        return False
+
+    month_days = repeat_config.split(",")
+    today = datetime.today().day
+    return today in [int(day) for day in month_days]
 
 @router.get("/users/{user_id}/habits-to-complete")
 def get_habits_to_complete_today(user_id: int, session: SessionDep):
@@ -46,10 +54,10 @@ def get_habits_to_complete_today(user_id: int, session: SessionDep):
         repeat_type = habit.repeat_type
         if repeat_type == "DAILY":
             habits_to_complete_ids.append(habit.id)
-        elif repeat_type == "SPECIFIC_WEEK_DAYS" and is_today_in_list_of_specific_week_days(habit.repeat_config):
+        elif repeat_type == "SPECIFIC_WEEKDAYS" and is_today_in_list_of_specific_weekdays(habit.repeat_config):
             habits_to_complete_ids.append(habit.id)
-        elif repeat_type == "SPECIFIC_MONTH_DAYS":
-            pass
+        elif repeat_type == "SPECIFIC_MONTH_DAYS" and is_today_in_list_of_specific_month_days(habit.repeat_config):
+            habits_to_complete_ids.append(habit.id)
         elif repeat_type == "N_TIMES_PER_WEEK":
             pass
         elif repeat_type == "N_TIMES_PER_MONTH":
