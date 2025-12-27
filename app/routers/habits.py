@@ -43,6 +43,24 @@ def is_today_in_list_of_specific_month_days(repeat_config: str):
     today = datetime.today().day
     return today in [int(day) for day in month_days]
 
+def is_n_times_per_week_goal_met(repeat_config: str, habit_id: int, session: SessionDep):
+    if not repeat_config:
+        return False
+
+    n = int(repeat_config)
+    statement = (select(HabitLogs)
+                 .where(HabitLogs.habit_fk == habit_id)
+                 .order_by(desc(HabitLogs.created_at))
+                 .limit(n))
+    last_n_habit_logs = session.exec(statement).all()
+    if not last_n_habit_logs:
+        return False
+
+    oldest_log_date = last_n_habit_logs[-1].created_at
+    oldest_log_year_and_week = oldest_log_date.isocalendar()[:2]
+    today_year_and_week = date.today().isocalendar()[:2]
+    return oldest_log_year_and_week == today_year_and_week
+
 @router.get("/users/{user_id}/habits-to-complete")
 def get_habits_to_complete_today(user_id: int, session: SessionDep):
     statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
@@ -52,18 +70,22 @@ def get_habits_to_complete_today(user_id: int, session: SessionDep):
     for habit in habits:
         # TODO: Add enum for repeat types
         repeat_type = habit.repeat_type
-        if repeat_type == "DAILY":
-            habits_to_complete_ids.append(habit.id)
-        elif repeat_type == "SPECIFIC_WEEKDAYS" and is_today_in_list_of_specific_weekdays(habit.repeat_config):
-            habits_to_complete_ids.append(habit.id)
-        elif repeat_type == "SPECIFIC_MONTH_DAYS" and is_today_in_list_of_specific_month_days(habit.repeat_config):
-            habits_to_complete_ids.append(habit.id)
-        elif repeat_type == "N_TIMES_PER_WEEK":
-            pass
-        elif repeat_type == "N_TIMES_PER_MONTH":
-            pass
-        elif repeat_type == "EVERY_N_DAYS":
-            pass
+        match repeat_type:
+            case "DAILY":
+                habits_to_complete_ids.append(habit.id)
+            case "SPECIFIC_WEEKDAYS":
+                if is_today_in_list_of_specific_weekdays(habit.repeat_config):
+                    habits_to_complete_ids.append(habit.id)
+            case "SPECIFIC_MONTH_DAYS":
+                if is_today_in_list_of_specific_month_days(habit.repeat_config):
+                    habits_to_complete_ids.append(habit.id)
+            case "N_TIMES_PER_WEEK":
+                if not is_n_times_per_week_goal_met(habit.repeat_config, habit.id, session):
+                    habits_to_complete_ids.append(habit.id)
+            case "N_TIMES_PER_MONTH":
+                pass
+            case "EVERY_N_DAYS":
+                pass
 
     return habits_to_complete_ids
 
