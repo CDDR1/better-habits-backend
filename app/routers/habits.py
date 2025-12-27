@@ -71,15 +71,34 @@ def is_n_times_per_month_goal_met(repeat_config: str, habit_id: int, session: Se
                  .order_by(desc(HabitLogs.created_at))
                  .limit(n))
     last_n_habit_logs = session.exec(statement).all()
-    if not last_n_habit_logs or len(last_n_habit_logs) < n:
+    if not last_n_habit_logs:
         return False
 
     oldest_log_date = last_n_habit_logs[-1].created_at
     today = date.today()
     return oldest_log_date.month == today.month
 
+def habit_was_last_displayed_n_or_more_days_ago(repeat_config: str, habit_id: int, session: SessionDep):
+    if not repeat_config:
+        return False
+
+    n = int(repeat_config)
+    statement = (select(HabitLogs)
+                 .where(HabitLogs.habit_fk == habit_id)
+                 .order_by(desc(HabitLogs.created_at))
+                 .limit(1))
+    latest_habit_log = session.exec(statement).all()
+    if not latest_habit_log:
+        return True
+
+    latest_habit_log_date = latest_habit_log[0].created_at
+    today = datetime.now()
+    days_difference = (today - latest_habit_log_date).days
+    return days_difference >= n
+
 @router.get("/users/{user_id}/habits-for-today")
 def get_habits_to_complete_today(user_id: int, session: SessionDep):
+    # TODO: Update this endpoint so it takes the date in the params and uses it instead of TODAY
     statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
     habits = session.exec(statement).all()
 
@@ -87,6 +106,7 @@ def get_habits_to_complete_today(user_id: int, session: SessionDep):
     for habit in habits:
         # TODO: Add enum for repeat types
         repeat_type = habit.repeat_type
+        # TODO: Update all these helper functions so that it throws an exception when the repeat_config is None instead of returning False
         match repeat_type:
             case "DAILY":
                 habits_to_complete_ids.append(habit.id)
@@ -103,7 +123,8 @@ def get_habits_to_complete_today(user_id: int, session: SessionDep):
                 if not is_n_times_per_month_goal_met(habit.repeat_config, habit.id, session):
                     habits_to_complete_ids.append(habit.id)
             case "EVERY_N_DAYS":
-                pass
+                if habit_was_last_displayed_n_or_more_days_ago(habit.repeat_config, habit.id, session):
+                    habits_to_complete_ids.append(habit.id)
 
     return habits_to_complete_ids
 
