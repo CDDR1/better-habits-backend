@@ -61,7 +61,24 @@ def is_n_times_per_week_goal_met(repeat_config: str, habit_id: int, session: Ses
     today_year_and_week = date.today().isocalendar()[:2]
     return oldest_log_year_and_week == today_year_and_week
 
-@router.get("/users/{user_id}/habits-to-complete")
+def is_n_times_per_month_goal_met(repeat_config: str, habit_id: int, session: SessionDep):
+    if not repeat_config:
+        return False
+
+    n = int(repeat_config)
+    statement = (select(HabitLogs)
+                 .where(HabitLogs.habit_fk == habit_id)
+                 .order_by(desc(HabitLogs.created_at))
+                 .limit(n))
+    last_n_habit_logs = session.exec(statement).all()
+    if not last_n_habit_logs or len(last_n_habit_logs) < n:
+        return False
+
+    oldest_log_date = last_n_habit_logs[-1].created_at
+    today = date.today()
+    return oldest_log_date.month == today.month
+
+@router.get("/users/{user_id}/habits-for-today")
 def get_habits_to_complete_today(user_id: int, session: SessionDep):
     statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
     habits = session.exec(statement).all()
@@ -83,7 +100,8 @@ def get_habits_to_complete_today(user_id: int, session: SessionDep):
                 if not is_n_times_per_week_goal_met(habit.repeat_config, habit.id, session):
                     habits_to_complete_ids.append(habit.id)
             case "N_TIMES_PER_MONTH":
-                pass
+                if not is_n_times_per_month_goal_met(habit.repeat_config, habit.id, session):
+                    habits_to_complete_ids.append(habit.id)
             case "EVERY_N_DAYS":
                 pass
 
