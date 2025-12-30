@@ -1,10 +1,10 @@
+from datetime import date, datetime
 from typing import List, Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import select, func, desc, distinct
-from datetime import date, datetime
-
 from ..db.database import SessionDep
+from ..enums.repeat_type_enum import RepeatType
 from ..models.models import Habits, HabitLogs, Categories, HabitsCategoriesLink
 from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest, DeleteHabitResponse, \
     ReorderHabitsRequest, ReorderHabitsResponse
@@ -104,25 +104,24 @@ def get_habits_to_complete_today(user_id: int, session: SessionDep):
 
     habits_to_complete_ids = []
     for habit in habits:
-        # TODO: Add enum for repeat types
         repeat_type = habit.repeat_type
         # TODO: Update all these helper functions so that it throws an exception when the repeat_config is None instead of returning False
         match repeat_type:
-            case "DAILY":
+            case RepeatType.DAILY.value:
                 habits_to_complete_ids.append(habit.id)
-            case "SPECIFIC_WEEKDAYS":
+            case RepeatType.SPECIFIC_WEEKDAYS.value:
                 if is_today_in_list_of_specific_weekdays(habit.repeat_config):
                     habits_to_complete_ids.append(habit.id)
-            case "SPECIFIC_MONTH_DAYS":
+            case RepeatType.SPECIFIC_MONTH_DAYS.value:
                 if is_today_in_list_of_specific_month_days(habit.repeat_config):
                     habits_to_complete_ids.append(habit.id)
-            case "N_TIMES_PER_WEEK":
+            case RepeatType.N_TIMES_PER_WEEK.value:
                 if not is_n_times_per_week_goal_met(habit.repeat_config, habit.id, session):
                     habits_to_complete_ids.append(habit.id)
-            case "N_TIMES_PER_MONTH":
+            case RepeatType.N_TIMES_PER_MONTH.value:
                 if not is_n_times_per_month_goal_met(habit.repeat_config, habit.id, session):
                     habits_to_complete_ids.append(habit.id)
-            case "EVERY_N_DAYS":
+            case RepeatType.EVERY_N_DAYS.value:
                 if habit_was_last_displayed_n_or_more_days_ago(habit.repeat_config, habit.id, session):
                     habits_to_complete_ids.append(habit.id)
 
