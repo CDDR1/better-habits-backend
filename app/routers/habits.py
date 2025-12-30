@@ -26,14 +26,15 @@ def get_habits_for_user(user_id: int, session: SessionDep):
     habits = session.exec(statement).all()
     return habits
 
-def is_today_in_list_of_specific_weekdays(repeat_config: str):
+def is_date_in_list_of_specific_weekdays(repeat_config: str, given_date: datetime | None):
     if not repeat_config:
         return False
 
+    weekday = given_date if given_date else datetime.now()
+    weekday_index = weekday.weekday()
     weekdays = repeat_config.split(",")
-    today = date.today().weekday()
     weekday_strings = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
-    return weekday_strings[today].lower() in [weekday.lower() for weekday in weekdays]
+    return weekday_strings[weekday_index].lower() in [weekday.lower() for weekday in weekdays]
 
 def is_today_in_list_of_specific_month_days(repeat_config: str):
     if not repeat_config:
@@ -96,8 +97,8 @@ def habit_was_last_displayed_n_or_more_days_ago(repeat_config: str, habit_id: in
     days_difference = (today - latest_habit_log_date).days
     return days_difference >= n
 
-@router.get("/users/{user_id}/habits-for-today")
-def get_habits_to_complete_today(user_id: int, session: SessionDep):
+@router.get("/users/{user_id}/habits-for-date")
+def get_habits_to_complete_in_given_date(user_id: int, session: SessionDep, param_date: datetime | None = None):
     # TODO: Update this endpoint so it takes the date in the params and uses it instead of TODAY
     statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
     habits = session.exec(statement).all()
@@ -110,7 +111,7 @@ def get_habits_to_complete_today(user_id: int, session: SessionDep):
             case RepeatType.DAILY.value:
                 habits_to_complete_ids.append(habit.id)
             case RepeatType.SPECIFIC_WEEKDAYS.value:
-                if is_today_in_list_of_specific_weekdays(habit.repeat_config):
+                if is_date_in_list_of_specific_weekdays(habit.repeat_config, param_date):
                     habits_to_complete_ids.append(habit.id)
             case RepeatType.SPECIFIC_MONTH_DAYS.value:
                 if is_today_in_list_of_specific_month_days(habit.repeat_config):
