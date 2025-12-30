@@ -36,12 +36,12 @@ def is_date_in_list_of_specific_weekdays(repeat_config: str, given_date: datetim
     weekday_strings = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
     return weekday_strings[weekday_index].lower() in [weekday.lower() for weekday in weekdays]
 
-def is_today_in_list_of_specific_month_days(repeat_config: str):
+def is_date_in_list_of_specific_month_days(repeat_config: str, given_date: datetime | None):
     if not repeat_config:
         return False
 
     month_days = repeat_config.split(",")
-    today = datetime.today().day
+    today = given_date.day if given_date else datetime.today().day
     return today in [int(day) for day in month_days]
 
 def is_n_times_per_week_goal_met(repeat_config: str, habit_id: int, session: SessionDep):
@@ -102,7 +102,6 @@ def get_habits_to_complete_in_given_date(user_id: int, session: SessionDep, para
     # TODO: Update this endpoint so it takes the date in the params and uses it instead of TODAY
     statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
     habits = session.exec(statement).all()
-
     habits_to_complete_ids = []
     for habit in habits:
         repeat_type = habit.repeat_type
@@ -114,7 +113,7 @@ def get_habits_to_complete_in_given_date(user_id: int, session: SessionDep, para
                 if is_date_in_list_of_specific_weekdays(habit.repeat_config, param_date):
                     habits_to_complete_ids.append(habit.id)
             case RepeatType.SPECIFIC_MONTH_DAYS.value:
-                if is_today_in_list_of_specific_month_days(habit.repeat_config):
+                if is_date_in_list_of_specific_month_days(habit.repeat_config, param_date):
                     habits_to_complete_ids.append(habit.id)
             case RepeatType.N_TIMES_PER_WEEK.value:
                 if not is_n_times_per_week_goal_met(habit.repeat_config, habit.id, session):
