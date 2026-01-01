@@ -44,7 +44,7 @@ def is_date_in_list_of_specific_month_days(repeat_config: str, given_date: datet
     today = given_date.day if given_date else datetime.today().day
     return today in [int(day) for day in month_days]
 
-def is_n_times_per_week_goal_met(repeat_config: str, habit_id: int, session: SessionDep):
+def is_n_times_per_week_goal_met(repeat_config: str, habit_id: int, given_date: datetime, session: SessionDep):
     if not repeat_config:
         return False
 
@@ -59,10 +59,11 @@ def is_n_times_per_week_goal_met(repeat_config: str, habit_id: int, session: Ses
 
     oldest_log_date = last_n_habit_logs[-1].created_at
     oldest_log_year_and_week = oldest_log_date.isocalendar()[:2]
-    today_year_and_week = date.today().isocalendar()[:2]
+    # isocalendar returns year, week, weekday. We're slicing out the weekday so that we only compare year and week
+    today_year_and_week = given_date.isocalendar()[:2] if given_date else datetime.now().isocalendar()[:2]
     return oldest_log_year_and_week == today_year_and_week
 
-def is_n_times_per_month_goal_met(repeat_config: str, habit_id: int, session: SessionDep):
+def is_n_times_per_month_goal_met(repeat_config: str, habit_id: int, given_date: datetime, session: SessionDep):
     if not repeat_config:
         return False
 
@@ -76,7 +77,7 @@ def is_n_times_per_month_goal_met(repeat_config: str, habit_id: int, session: Se
         return False
 
     oldest_log_date = last_n_habit_logs[-1].created_at
-    today = date.today()
+    today = given_date if given_date else datetime.now()
     return oldest_log_date.month == today.month
 
 def habit_was_last_displayed_n_or_more_days_ago(repeat_config: str, habit_id: int, session: SessionDep):
@@ -116,10 +117,10 @@ def get_habits_to_complete_in_given_date(user_id: int, session: SessionDep, para
                 if is_date_in_list_of_specific_month_days(habit.repeat_config, param_date):
                     habits_to_complete_ids.append(habit.id)
             case RepeatType.N_TIMES_PER_WEEK.value:
-                if not is_n_times_per_week_goal_met(habit.repeat_config, habit.id, session):
+                if not is_n_times_per_week_goal_met(habit.repeat_config, habit.id, param_date, session):
                     habits_to_complete_ids.append(habit.id)
             case RepeatType.N_TIMES_PER_MONTH.value:
-                if not is_n_times_per_month_goal_met(habit.repeat_config, habit.id, session):
+                if not is_n_times_per_month_goal_met(habit.repeat_config, habit.id, param_date, session):
                     habits_to_complete_ids.append(habit.id)
             case RepeatType.EVERY_N_DAYS.value:
                 if habit_was_last_displayed_n_or_more_days_ago(habit.repeat_config, habit.id, session):
