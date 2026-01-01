@@ -80,27 +80,28 @@ def is_n_times_per_month_goal_met(repeat_config: str, habit_id: int, given_date:
     today = given_date if given_date else datetime.now()
     return oldest_log_date.month == today.month
 
-def habit_was_last_displayed_n_or_more_days_ago(repeat_config: str, habit_id: int, session: SessionDep):
+def habit_was_last_displayed_n_or_more_days_ago(repeat_config: str, habit_id: int, given_date: datetime, session: SessionDep):
     if not repeat_config:
         return False
 
     n = int(repeat_config)
+    today = given_date.date() if given_date else datetime.now().date()
     statement = (select(HabitLogs)
                  .where(HabitLogs.habit_fk == habit_id)
+                 .where(HabitLogs.created_at < today)
                  .order_by(desc(HabitLogs.created_at))
                  .limit(1))
     latest_habit_log = session.exec(statement).all()
+    # We return true because if there are no habit_log records, that means this habit has never been displayed
     if not latest_habit_log:
         return True
 
-    latest_habit_log_date = latest_habit_log[0].created_at
-    today = datetime.now()
+    latest_habit_log_date = latest_habit_log[0].created_at.date()
     days_difference = (today - latest_habit_log_date).days
     return days_difference >= n
 
 @router.get("/users/{user_id}/habits-for-date")
 def get_habits_to_complete_in_given_date(user_id: int, session: SessionDep, param_date: datetime | None = None):
-    # TODO: Update this endpoint so it takes the date in the params and uses it instead of TODAY
     statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
     habits = session.exec(statement).all()
     habits_to_complete_ids = []
@@ -123,7 +124,7 @@ def get_habits_to_complete_in_given_date(user_id: int, session: SessionDep, para
                 if not is_n_times_per_month_goal_met(habit.repeat_config, habit.id, param_date, session):
                     habits_to_complete_ids.append(habit.id)
             case RepeatType.EVERY_N_DAYS.value:
-                if habit_was_last_displayed_n_or_more_days_ago(habit.repeat_config, habit.id, session):
+                if habit_was_last_displayed_n_or_more_days_ago(habit.repeat_config, habit.id, param_date, session):
                     habits_to_complete_ids.append(habit.id)
 
     return habits_to_complete_ids
