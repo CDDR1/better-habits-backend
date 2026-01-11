@@ -100,34 +100,69 @@ def habit_was_last_displayed_n_or_more_days_ago(repeat_config: str, habit_id: in
     days_difference = (today - latest_habit_log_date).days
     return days_difference >= n
 
+def add_existing_progress_to_habit_data(habits: list, given_date: datetime, session: SessionDep):
+    """
+    Query the habit_logs table to check if there are any existing habit logs for today for the given list of habits.
+    If there are, add the progress value to the data. Add progress value of 0 for the ones that doesn't have an existing log
+    """
+    today = given_date.date() if given_date else datetime.now().date()
+    ids = [habit.id for habit in habits]
+    statement = (select(HabitLogs)
+                 .where(HabitLogs.habit_fk.in_(ids))
+                 .where(func.date(HabitLogs.created_at) == today))
+    habit_logs = session.exec(statement).all()
+
+    habits_with_progress = []
+    for habit in habits:
+        habit_with_progress = habit.__dict__
+        has_habit_log = habit.id in [habit_log.habit_fk for habit_log in habit_logs]
+        if has_habit_log:
+            habit_with_progress['progress_value'] = [habit_log.progress_value for habit_log in habit_logs if habit_log.habit_fk == habit.id][0]
+        else:
+            habit_with_progress['progress_value'] = 0
+        habits_with_progress.append(habit_with_progress)
+
+
+    return habits_with_progress
+
+
 @router.get("/users/{user_id}/habits-for-date")
 def get_habits_to_complete_in_given_date(user_id: int, session: SessionDep, param_date: datetime | None = None):
-    statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
+    """
+    Returns a list of the habits that should be completed in a given date. If no query param is included, it's assumed
+    it should return the response based on the current date
+
+    :param user_id:
+    :param session:
+    :param param_date:
+    :return:
+    """
+    statement = select(Habits).where(Habits.user_fk == user_id).where(Habits.is_archived == False).order_by(desc(Habits.display_order))
     habits = session.exec(statement).all()
     habits_to_complete_ids = []
     for habit in habits:
         repeat_type = habit.repeat_type
-        # TODO: Update all these helper functions so that it throws an exception when the repeat_config is None instead of returning False
         match repeat_type:
             case RepeatType.DAILY.value:
-                habits_to_complete_ids.append(habit.id)
+                habits_to_complete_ids.append(habit)
             case RepeatType.SPECIFIC_WEEKDAYS.value:
                 if is_date_in_list_of_specific_weekdays(habit.repeat_config, param_date):
-                    habits_to_complete_ids.append(habit.id)
+                    habits_to_complete_ids.append(habit)
             case RepeatType.SPECIFIC_MONTH_DAYS.value:
                 if is_date_in_list_of_specific_month_days(habit.repeat_config, param_date):
-                    habits_to_complete_ids.append(habit.id)
+                    habits_to_complete_ids.append(habit)
             case RepeatType.N_TIMES_PER_WEEK.value:
                 if not is_n_times_per_week_goal_met(habit.repeat_config, habit.id, param_date, session):
-                    habits_to_complete_ids.append(habit.id)
+                    habits_to_complete_ids.append(habit)
             case RepeatType.N_TIMES_PER_MONTH.value:
                 if not is_n_times_per_month_goal_met(habit.repeat_config, habit.id, param_date, session):
-                    habits_to_complete_ids.append(habit.id)
+                    habits_to_complete_ids.append(habit)
             case RepeatType.EVERY_N_DAYS.value:
                 if habit_was_last_displayed_n_or_more_days_ago(habit.repeat_config, habit.id, param_date, session):
-                    habits_to_complete_ids.append(habit.id)
+                    habits_to_complete_ids.append(habit)
 
-    return habits_to_complete_ids
+    habit_data = add_existing_progress_to_habit_data(habits, param_date, session)
+    return habit_data
 
 @router.get("/habits/{habit_id}/categories")
 def get_categories_for_habit(habit_id: int, session: SessionDep):
