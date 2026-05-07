@@ -12,7 +12,7 @@ from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest, 
 router = APIRouter()
 
 # TODO: Add docstring comments
-# TODO: Move the logic and helper functions of these endpoints to the services directory
+# TODO: Move the logic and helper functions of these endpoints to the services directory 
 
 # TODO: Might want to delete this endpoint after development, as there is no need to get all the habits
 @router.get("/habits")
@@ -50,7 +50,7 @@ def is_n_times_per_week_goal_met(repeat_config: str, habit_id: int, given_date: 
 
     n = int(repeat_config)
     statement = (select(HabitLogs)
-                 .where(HabitLogs.habit_fk == habit_id)
+                 .where(HabitLogs.habit_fk == habit_id) 
                  .order_by(desc(HabitLogs.created_at))
                  .limit(n))
     last_n_habit_logs = session.exec(statement).all()
