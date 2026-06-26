@@ -1,71 +1,34 @@
-from datetime import datetime
-from typing import Optional, List
+from datetime import datetime, date
+from typing import Optional
 
-from sqlmodel import SQLModel, Field, Relationship
-
-
-class Users(SQLModel, table=True):
-    id: int = Field(primary_key=True)
-    email: str
-    password_hash: str
-    created_at: datetime
-    updated_at: datetime
-
-
-class HabitsCategoriesLink(SQLModel, table=True):
-    __tablename__ = "habits_categories_link"
-
-    habit_fk: int = Field(foreign_key="habits.id", primary_key=True)
-    category_fk: int = Field(foreign_key="categories.id", primary_key=True)
-    created_at: datetime
-    updated_at: datetime
-
-
-class Habits(SQLModel, table=True):
-    id: int = Field(primary_key=True)
-    name: str
-    description: Optional[str] = None
-    icon: Optional[str] = None
-    color_hex: Optional[str] = None
-    is_bad_habit: bool
-    repeat_type: str
-    repeat_config: Optional[str] = None
-    is_archived: bool
-    is_check_only: bool
-    start_date: datetime
-    end_date: Optional[datetime] = None
-    display_order: int = None
-    goal_value: Optional[int] = None
-    goal_unit: Optional[str] = None
-    goal_is_time: bool
-    user_fk: int = Field(foreign_key="users.id")
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
-
-    categories: List["Categories"] = Relationship(back_populates="habits", link_model=HabitsCategoriesLink)
+from sqlmodel import SQLModel, Field, UniqueConstraint
 
 
 class Categories(SQLModel, table=True):
-    id: int = Field(primary_key=True)
+    id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    icon: Optional[str] = None
-    user_fk: int = Field(foreign_key="users.id")
+    description: Optional[str] = None
+    user_id: str = Field(index=True)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
-    habits: List["Habits"] = Relationship(back_populates="categories", link_model=HabitsCategoriesLink)
+
+class Habits(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    description: Optional[str] = None
+    color_hex: str
+    category_id: Optional[int] = Field(default=None, foreign_key="categories.id")
+    user_id: str = Field(index=True)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 class HabitLogs(SQLModel, table=True):
     __tablename__ = "habit_logs"
+    __table_args__ = (UniqueConstraint("habit_id", "completed_on", name="uq_habit_log_per_day"),)
 
-    id: int = Field(primary_key=True)
-    habit_fk: int = Field(foreign_key="habits.id")
-    progress_value: Optional[float] = None
-    note: Optional[str] = None
-    # these are the goal value and goal unit at time of entry
-    goal_value: Optional[int] = None
-    goal_unit: Optional[str] = None
-    completion_percentage: float
+    id: Optional[int] = Field(default=None, primary_key=True)
+    habit_id: int = Field(foreign_key="habits.id", index=True)
+    completed_on: date
     created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)

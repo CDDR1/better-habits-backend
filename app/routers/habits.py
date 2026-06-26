@@ -1,310 +1,83 @@
-from datetime import date, datetime
-from typing import List, Annotated
+from datetime import datetime
+from typing import List
 
-from fastapi import APIRouter, HTTPException, Query
-from sqlmodel import select, func, desc, distinct
+from fastapi import APIRouter, HTTPException, status
+from sqlmodel import select, Session
+
+from ..auth import CurrentUser
 from ..db.database import SessionDep
-from ..enums.repeat_type_enum import RepeatType
-from ..models.models import Habits, HabitLogs, Categories, HabitsCategoriesLink
-from ..schemas.schemas import UpsertHabitRequest, UpdateHabitCategoriesRequest, DeleteHabitResponse, \
-    ReorderHabitsRequest, ReorderHabitsResponse
+from ..models.models import Habits, Categories
+from ..schemas.schemas import CreateHabitRequest, UpdateHabitRequest
 
-router = APIRouter()
-
-# TODO: Add docstring comments
-# TODO: Move the logic and helper functions of these endpoints to the services directory 
-
-# TODO: Might want to delete this endpoint after development, as there is no need to get all the habits
-@router.get("/habits")
-def get_habits(session: SessionDep):
-    habits = session.exec(select(Habits)).all()
-    return habits
-
-@router.get("/users/{user_id}/habits")
-def get_habits_for_user(user_id: int, session: SessionDep):
-    statement = select(Habits).where(Habits.user_fk == user_id).order_by(desc(Habits.display_order))
-    habits = session.exec(statement).all()
-    return habits
-
-def is_date_in_list_of_specific_weekdays(repeat_config: str, given_date: datetime | None):
-    if not repeat_config:
-        return False
-
-    weekday = given_date if given_date else datetime.now()
-    weekday_index = weekday.weekday()
-    weekdays = repeat_config.split(",")
-    weekday_strings = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
-    return weekday_strings[weekday_index].lower() in [weekday.lower() for weekday in weekdays]
-
-def is_date_in_list_of_specific_month_days(repeat_config: str, given_date: datetime | None):
-    if not repeat_config:
-        return False
-
-    month_days = repeat_config.split(",")
-    today = given_date.day if given_date else datetime.today().day
-    return today in [int(day) for day in month_days]
-
-def is_n_times_per_week_goal_met(repeat_config: str, habit_id: int, given_date: datetime, session: SessionDep):
-    if not repeat_config:
-        return False
-
-    n = int(repeat_config)
-    statement = (select(HabitLogs)
-                 .where(HabitLogs.habit_fk == habit_id) 
-                 .order_by(desc(HabitLogs.created_at))
-                 .limit(n))
-    last_n_habit_logs = session.exec(statement).all()
-    if not last_n_habit_logs:
-        return False
-
-    oldest_log_date = last_n_habit_logs[-1].created_at
-    oldest_log_year_and_week = oldest_log_date.isocalendar()[:2]
-    # isocalendar returns year, week, weekday. We're slicing out the weekday so that we only compare year and week
-    today_year_and_week = given_date.isocalendar()[:2] if given_date else datetime.now().isocalendar()[:2]
-    return oldest_log_year_and_week == today_year_and_week
-
-def is_n_times_per_month_goal_met(repeat_config: str, habit_id: int, given_date: datetime, session: SessionDep):
-    if not repeat_config:
-        return False
-
-    n = int(repeat_config)
-    statement = (select(HabitLogs)
-                 .where(HabitLogs.habit_fk == habit_id)
-                 .order_by(desc(HabitLogs.created_at))
-                 .limit(n))
-    last_n_habit_logs = session.exec(statement).all()
-    if not last_n_habit_logs:
-        return False
-
-    oldest_log_date = last_n_habit_logs[-1].created_at
-    today = given_date if given_date else datetime.now()
-    return oldest_log_date.month == today.month
-
-def habit_was_last_displayed_n_or_more_days_ago(repeat_config: str, habit_id: int, given_date: datetime, session: SessionDep):
-    if not repeat_config:
-        return False
-
-    n = int(repeat_config)
-    today = given_date.date() if given_date else datetime.now().date()
-    statement = (select(HabitLogs)
-                 .where(HabitLogs.habit_fk == habit_id)
-                 .where(HabitLogs.created_at < today)
-                 .order_by(desc(HabitLogs.created_at))
-                 .limit(1))
-    latest_habit_log = session.exec(statement).all()
-    # We return true because if there are no habit_log records, that means this habit has never been displayed
-    if not latest_habit_log:
-        return True
-
-    latest_habit_log_date = latest_habit_log[0].created_at.date()
-    days_difference = (today - latest_habit_log_date).days
-    return days_difference >= n
-
-def add_existing_progress_to_habit_data(habits: list, given_date: datetime, session: SessionDep):
-    """
-    Query the habit_logs table to check if there are any existing habit logs for today for the given list of habits.
-    If there are, add the progress value to the data. Add progress value of 0 for the ones that doesn't have an existing log
-    """
-    today = given_date.date() if given_date else datetime.now().date()
-    ids = [habit.id for habit in habits]
-    statement = (select(HabitLogs)
-                 .where(HabitLogs.habit_fk.in_(ids))
-                 .where(func.date(HabitLogs.created_at) == today))
-    habit_logs = session.exec(statement).all()
-
-    habits_with_progress = []
-    for habit in habits:
-        habit_with_progress = habit.__dict__
-        has_habit_log = habit.id in [habit_log.habit_fk for habit_log in habit_logs]
-        if has_habit_log:
-            habit_with_progress['progress_value'] = [habit_log.progress_value for habit_log in habit_logs if habit_log.habit_fk == habit.id][0]
-        else:
-            habit_with_progress['progress_value'] = 0
-        habits_with_progress.append(habit_with_progress)
+router = APIRouter(prefix="/habits", tags=["Habits"])
 
 
-    return habits_with_progress
+def _get_owned_habit(habit_id: int, user_id: str, session: Session) -> Habits:
+    habit = session.exec(
+        select(Habits).where(Habits.id == habit_id, Habits.user_id == user_id)
+    ).one_or_none()
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    return habit
 
 
-@router.get("/users/{user_id}/habits-for-date")
-def get_habits_to_complete_in_given_date(user_id: int, session: SessionDep, param_date: datetime | None = None):
-    """
-    Returns a list of the habits that should be completed in a given date. If no query param is included, it's assumed
-    it should return the response based on the current date
+def _assert_category_owned(category_id: int, user_id: str, session: Session) -> None:
+    category = session.exec(
+        select(Categories).where(Categories.id == category_id, Categories.user_id == user_id)
+    ).one_or_none()
+    if not category:
+        raise HTTPException(status_code=400, detail=f"Category {category_id} not found")
 
-    :param user_id:
-    :param session:
-    :param param_date:
-    :return:
-    """
-    statement = select(Habits).where(Habits.user_fk == user_id).where(Habits.is_archived == False).order_by(desc(Habits.display_order))
-    habits = session.exec(statement).all()
-    habits_to_complete_ids = []
-    for habit in habits:
-        repeat_type = habit.repeat_type
-        match repeat_type:
-            case RepeatType.DAILY.value:
-                habits_to_complete_ids.append(habit)
-            case RepeatType.SPECIFIC_WEEKDAYS.value:
-                if is_date_in_list_of_specific_weekdays(habit.repeat_config, param_date):
-                    habits_to_complete_ids.append(habit)
-            case RepeatType.SPECIFIC_MONTH_DAYS.value:
-                if is_date_in_list_of_specific_month_days(habit.repeat_config, param_date):
-                    habits_to_complete_ids.append(habit)
-            case RepeatType.N_TIMES_PER_WEEK.value:
-                if not is_n_times_per_week_goal_met(habit.repeat_config, habit.id, param_date, session):
-                    habits_to_complete_ids.append(habit)
-            case RepeatType.N_TIMES_PER_MONTH.value:
-                if not is_n_times_per_month_goal_met(habit.repeat_config, habit.id, param_date, session):
-                    habits_to_complete_ids.append(habit)
-            case RepeatType.EVERY_N_DAYS.value:
-                if habit_was_last_displayed_n_or_more_days_ago(habit.repeat_config, habit.id, param_date, session):
-                    habits_to_complete_ids.append(habit)
 
-    habit_data = add_existing_progress_to_habit_data(habits, param_date, session)
-    return habit_data
+@router.get("", summary="List habits")
+def list_habits(user_id: CurrentUser, session: SessionDep) -> List[Habits]:
+    """Return every habit owned by the current user."""
+    return session.exec(select(Habits).where(Habits.user_id == user_id)).all()
 
-@router.get("/habits/{habit_id}/categories")
-def get_categories_for_habit(habit_id: int, session: SessionDep):
-    statement = select(Habits).where(Habits.id == habit_id)
-    habit = session.exec(statement).one_or_none()
-    return habit.categories
 
-@router.post("/habits/{habit_id}/categories")
-def add_categories_for_habit(habit_id: int, request_body: UpdateHabitCategoriesRequest, session: SessionDep):
-    # TODO: Add input validation to avoid adding categories that already exist
-    habit = session.exec(select(Habits).where(Habits.id == habit_id)).one()
+@router.get("/{habit_id}", summary="Get a habit")
+def get_habit(habit_id: int, user_id: CurrentUser, session: SessionDep) -> Habits:
+    """Return a single habit by id. 404 if it doesn't exist or isn't yours."""
+    return _get_owned_habit(habit_id, user_id, session)
 
-    for category_id in request_body.category_ids:
-        category = session.exec(select(Categories).where(Categories.id == category_id)).one()
-        habit.categories.append(category)
 
-    session.add(habit)
-    session.commit()
-    return habit.categories
+@router.post("", summary="Create a habit", status_code=status.HTTP_201_CREATED)
+def create_habit(request: CreateHabitRequest, user_id: CurrentUser, session: SessionDep) -> Habits:
+    """Create a new habit for the current user. `category_id` is optional;
+    if provided, it must reference a category the current user owns."""
+    if request.category_id is not None:
+        _assert_category_owned(request.category_id, user_id, session)
 
-@router.delete("/habits/{habit_id}/categories")
-def delete_category_from_habit(habit_id: int, request_body: UpdateHabitCategoriesRequest, session: SessionDep):
-    habit = session.exec(select(Habits).where(Habits.id == habit_id)).one()
-
-    for category_id in request_body.category_ids:
-        category = session.exec(select(Categories).where(Categories.id == category_id)).one()
-        habit.categories.remove(category)
-
-    session.add(habit)
-    session.commit()
-    return habit.categories
-
-@router.get("/habits/{habit_id}/logs")
-def get_habit_logs_for_habit(habit_id: int, session: SessionDep):
-    statement = select(HabitLogs).where(HabitLogs.habit_fk == habit_id)
-    habit_logs = session.exec(statement).all()
-    return habit_logs
-
-@router.post("/habits")
-def create_habit(habit: UpsertHabitRequest, session: SessionDep):
-    new_habit = Habits(**habit.model_dump())
-    get_greatest_display_order_statement = select(func.max(Habits.display_order))
-    greatest_display_order = session.exec(get_greatest_display_order_statement).one()
-    new_habit.display_order = (greatest_display_order or 0) + 1
+    new_habit = Habits(**request.model_dump(), user_id=user_id)
     session.add(new_habit)
     session.commit()
     session.refresh(new_habit)
     return new_habit
 
-@router.patch("/habits/{habit_id}")
-def update_habit(habit_id: int, updated_habit: UpsertHabitRequest, session: SessionDep):
-    get_habit_statement = select(Habits).where(Habits.id == habit_id)
-    habit = session.exec(get_habit_statement).one()
 
-    updated_habit_dict = updated_habit.model_dump(exclude_unset=True)
-    for key, value in updated_habit_dict.items():
+@router.patch("/{habit_id}", summary="Update a habit")
+def update_habit(habit_id: int, request: UpdateHabitRequest, user_id: CurrentUser, session: SessionDep) -> Habits:
+    """Partial update. Only fields present in the body are changed.
+    If `category_id` is provided, it must reference a category the current user owns."""
+    habit = _get_owned_habit(habit_id, user_id, session)
+
+    updates = request.model_dump(exclude_unset=True)
+    if "category_id" in updates and updates["category_id"] is not None:
+        _assert_category_owned(updates["category_id"], user_id, session)
+
+    for key, value in updates.items():
         setattr(habit, key, value)
+    habit.updated_at = datetime.now()
 
     session.add(habit)
     session.commit()
     session.refresh(habit)
     return habit
 
-def balance_display_order_fields(deleted_display_order: int, session: SessionDep):
-    """
-    Updates the display_order fields to remove gaps and ensure they are sequential, typically after habit deletion.
-    :param deleted_display_order: display order of the deleted habit
-    :param session: current DB session
-    """
-    statement = select(Habits).where(Habits.display_order > deleted_display_order)
-    habits_to_update = session.exec(statement).all()
 
-    for habit in habits_to_update:
-        habit.display_order = habit.display_order - 1
-
-    if habits_to_update:
-        session.add_all(habits_to_update)
-        session.commit()
-
-@router.delete("/habits/{habit_id}")
-def delete_habit(habit_id: int, session: SessionDep) -> DeleteHabitResponse:
-    statement = select(Habits).where(Habits.id == habit_id)
-    habit = session.exec(statement).one()
+@router.delete("/{habit_id}", summary="Delete a habit", status_code=status.HTTP_204_NO_CONTENT)
+def delete_habit(habit_id: int, user_id: CurrentUser, session: SessionDep) -> None:
+    """Delete a habit. Also deletes its completion logs (via the habit_logs.habit_id FK)."""
+    habit = _get_owned_habit(habit_id, user_id, session)
     session.delete(habit)
     session.commit()
-
-    # confirm habit was deleted
-    deleted_habit = session.exec(statement).first()
-    if deleted_habit is not None:
-        # TODO: Raise an exception
-        pass
-
-    balance_display_order_fields(habit.display_order, session)
-    response = DeleteHabitResponse(is_success=True)
-    return response
-
-@router.patch("/habits-reorder")
-def reorder_habits(request_body: ReorderHabitsRequest, session: SessionDep) -> ReorderHabitsResponse:
-    habits_to_reorder = request_body.habits_to_reorder
-    habits_to_reorder_ids = {habit.id for habit in habits_to_reorder}
-    if len(habits_to_reorder_ids) != len(habits_to_reorder):
-        raise HTTPException(status_code=400, detail=f"Duplicate habit IDs found in request")
-
-    id_to_display_order_dict = {habit.id: habit.display_order for habit in habits_to_reorder}
-    statement = select(Habits).where(Habits.id.in_(id_to_display_order_dict.keys()))
-    habits = session.exec(statement).all()
-
-    found_ids = {habit.id for habit in habits}
-    missing_ids = habits_to_reorder_ids - found_ids
-    if missing_ids:
-        raise HTTPException(status_code=400, detail=f"Not all habit IDs in the request were found - missing IDs: {sorted(missing_ids)}")
-
-    for habit in habits:
-        habit.display_order = id_to_display_order_dict[habit.id]
-
-    session.add_all(habits)
-    session.commit()
-    response = ReorderHabitsResponse(is_success=True)
-    return response
-
-@router.get("/habits-by-categories")
-def get_habits_by_categories(category_ids: Annotated[List[int], Query()], session: SessionDep) -> List[Habits]:
-    """
-    Returns habits filtered by one or multiple categories
-    :param category_ids: Query parameter that contains a list of category iDs to filter habits by
-    :param session: current DB session
-    :return: list of Habits
-    """
-    validate_category_ids_statement = select(Categories.id).where(Categories.id.in_(category_ids))
-    found_category_ids = session.exec(validate_category_ids_statement).all()
-    if len(found_category_ids) != len(category_ids):
-        categories_not_found = set(category_ids) - set(found_category_ids)
-        raise HTTPException(status_code=400, detail=f"Not all category IDs in the request were found - missing IDs: {sorted(categories_not_found)}")
-
-    habits_by_categories_statement = (
-        select(HabitsCategoriesLink.habit_fk)
-        .where(HabitsCategoriesLink.category_fk.in_(category_ids))
-        .group_by(HabitsCategoriesLink.habit_fk)
-        .having(func.count(distinct(HabitsCategoriesLink.category_fk)) == len(category_ids))
-    )
-    habits_ids = session.exec(habits_by_categories_statement).all()
-
-    get_habits_statement = select(Habits).where(Habits.id.in_(habits_ids))
-    habits = session.exec(get_habits_statement)
-    return habits
